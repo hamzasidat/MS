@@ -30,7 +30,7 @@ function DatasetPage() {
     }, []);
 
     const handleExport = () => {
-        setDialogOpen(true);
+        window.location.href = 'http://localhost:5000/api/export';
     };
 
     const handleCloseDialog = () => {
