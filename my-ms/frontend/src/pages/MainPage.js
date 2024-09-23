@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { TextField, Button, Checkbox, FormControlLabel, Container, Grid, Paper, Typography, Box } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { TextField, Button, Checkbox, FormControlLabel, Container, Grid, Paper, Typography, Box, CircularProgress, Dialog, DialogContent, DialogContentText, DialogTitle, DialogActions, FormHelperText } from '@mui/material';
 import axios from 'axios';
 
 function MainPage() {
@@ -14,8 +14,20 @@ function MainPage() {
         includeImage: false,
     });
 
-    const [story, setStory] = useState('');
+    const [stories, setStories] = useState([]);
     const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [imageUrl, setImageUrl] = useState('');
+    const [dialogOpen, setDialogOpen] = useState(false); // Start with dialog closed
+
+    useEffect(() => {
+        // Check if the user has seen the welcome dialog
+        const hasSeenDialog = localStorage.getItem('hasSeenDialog');
+        if (!hasSeenDialog) {
+            setDialogOpen(true);
+            localStorage.setItem('hasSeenDialog', 'true');
+        }
+    }, []);
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -25,50 +37,58 @@ function MainPage() {
         });
     };
 
-    const handleValidation = () => {
+    const handleValidationForGeneration = () => {
         const { name, age, gender, ethnicity, interests } = formData;
         return name && age && gender && ethnicity && interests;
     };
 
-    const [imageUrl, setImageUrl] = useState('');
-
-
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!handleValidation()) {
+        if (!handleValidationForGeneration()) {
             setError('All mandatory fields must be filled out.');
             return;
         }
         setError('');
+        setLoading(true);
         try {
-            const response = await axios.post('http://localhost:5000/api/generate-story', formData);
-            setStory(response.data.story);
+            const response = await axios.post('https://mirrorstories.me/api/generate-story', formData);
+            setStories([response.data.story]);
             setImageUrl(response.data.image_url);
-            document.getElementById('story-output').innerText = response.data.story;
             // Save the story to the dataset
-            await axios.post('http://localhost:5000/api/save-story', {
+            await axios.post('https://mirrorstories.me/api/save-story', {
                 ...formData,
                 story: response.data.story,
             });
         } catch (error) {
             console.error('Error generating story:', error);
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleSearch = async (e) => {
         e.preventDefault();
-        if (!handleValidation()) {
-            setError('All mandatory fields must be filled out.');
-            return;
-        }
         setError('');
+        setLoading(true);
         try {
-            const response = await axios.post('http://localhost:5000/api/search-story', formData);
-            setStory(response.data.story);
-            document.getElementById('story-output').innerText = response.data.story;
+            const response = await axios.post('https://mirrorstories.me/api/search-story', formData);
+            if (response.data.stories && response.data.stories.length > 0) {
+                setStories(response.data.stories);
+            } else {
+                setStories([]); // Clear the stories if no matching story is found
+                setError('No matching story found');
+            }
         } catch (error) {
             console.error('Error searching story:', error);
+            setError('No matching story found');
+            setStories([]); // Clear the stories if there's an error
+        } finally {
+            setLoading(false);
         }
+    };
+
+    const handleCloseDialog = () => {
+        setDialogOpen(false);
     };
 
     return (
@@ -88,6 +108,7 @@ function MainPage() {
                                 fullWidth
                                 required
                             />
+                            <FormHelperText>Name of the character. Ex: John</FormHelperText>
                         </Grid>
                         <Grid item xs={12} sm={6}>
                             <TextField
@@ -98,6 +119,7 @@ function MainPage() {
                                 fullWidth
                                 required
                             />
+                            <FormHelperText>Age of the character. Ex: 25</FormHelperText>
                         </Grid>
                         <Grid item xs={12} sm={6}>
                             <TextField
@@ -108,6 +130,7 @@ function MainPage() {
                                 fullWidth
                                 required
                             />
+                            <FormHelperText>Gender of the character. Ex: Male</FormHelperText>
                         </Grid>
                         <Grid item xs={12} sm={6}>
                             <TextField
@@ -118,6 +141,7 @@ function MainPage() {
                                 fullWidth
                                 required
                             />
+                            <FormHelperText>Ethnicity of the character. Ex: Indian</FormHelperText>
                         </Grid>
                         <Grid item xs={12}>
                             <TextField
@@ -128,6 +152,7 @@ function MainPage() {
                                 fullWidth
                                 required
                             />
+                            <FormHelperText>Interest of the character. Ex: Soccer</FormHelperText>
                         </Grid>
                         <Grid item xs={12}>
                             <Typography variant="h6" gutterBottom>
@@ -141,6 +166,7 @@ function MainPage() {
                                 fullWidth
                                 margin="normal"
                             />
+                            <FormHelperText>Moral of the story. Ex: Honesty is the best policy</FormHelperText>
                             <TextField
                                 label="Length"
                                 name="length"
@@ -149,6 +175,7 @@ function MainPage() {
                                 fullWidth
                                 margin="normal"
                             />
+                            <FormHelperText>Length of the story in words. Ex: 500</FormHelperText>
                             <FormControlLabel
                                 control={
                                     <Checkbox
@@ -172,7 +199,11 @@ function MainPage() {
                 </form>
                 {error && <Typography color="error">{error}</Typography>}
                 <Box mt={4} id="story-output">
-                    {story && <Typography variant="body1">{story}</Typography>}
+                    {stories.length > 0 && stories.map((story, index) => (
+                        <Typography key={index} variant="body1" style={{ marginBottom: '10px' }}>
+                            {story}
+                        </Typography>
+                    ))}
                     {imageUrl && (
                         <Box mt={2}>
                             <img src={imageUrl} alt="Generated character" style={{ maxWidth: '100%', height: 'auto' }} />
@@ -180,6 +211,29 @@ function MainPage() {
                     )}
                 </Box>
             </Paper>
+            <Dialog open={loading}>
+                <DialogContent>
+                    <DialogContentText>Generating story, please wait...</DialogContentText>
+                    <Box display="flex" justifyContent="center" mt={2}>
+                        <CircularProgress />
+                    </Box>
+                </DialogContent>
+            </Dialog>
+            <Dialog open={dialogOpen} onClose={handleCloseDialog}>
+                <DialogTitle>Welcome to the MirrorStories!</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        You can generate stories by entering all the mandatory fields: Name, Age, Gender, Ethnicity, and Interests.
+                        Optionally, you can include a Moral and specify the Length of the story. You can also choose to include an image.
+                        If you want to search for existing stories, you can filter them based on any one of the field provided.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseDialog} color="primary">
+                        Got it
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Container>
     );
 }
