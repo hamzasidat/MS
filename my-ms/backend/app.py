@@ -38,8 +38,15 @@ def generate_story():
     length = data.get('length')
     include_image = data.get('includeImage')
 
-    prompt = f"Write a short story about a person named {name}, aged {age}, gender {gender}, ethnicity {ethnicity}, interested in {interests}. Include a moral: {moral}, if not empty. Target length: {length}, if not empty."
-    
+   # Create the base prompt
+    prompt = f"Write a short story about a person named {name}, aged {age}, gender {gender}, ethnicity {ethnicity}, interested in {interests}."
+
+    # Append optional parts if they are provided
+    if moral:
+        prompt += f" Include a moral: {moral}."
+    if length:
+        prompt += f" Target length: {length} words."
+
     try:
         # Generate story
         story_response = openai.chat.completions.create(
@@ -54,7 +61,7 @@ def generate_story():
         image_url = None
         if include_image:
             # Generate image
-            image_prompt = f"A portrait of {name}, a {age}-year-old {gender} of {ethnicity} ethnicity, interested in {interests}."
+            image_prompt = f"Generate an image of {name}, a {age}-year-old {gender} of {ethnicity} ethnicity with a passion for {interests}."
             image_response = openai.images.generate(
                 model="dall-e-3",
                 prompt=image_prompt,
@@ -73,17 +80,39 @@ def generate_story():
 @app.route('/api/search-story', methods=['POST'])
 def search_story():
     data = request.json
-    filtered_df = df[
-        (df['Name'] == data.get('name')) |
-        (df['Age'] == data.get('age')) |
-        (df['Gender'] == data.get('gender')) |
-        (df['Interest'] == data.get('interests')) |
-        (df['Ethnic Background'] == data.get('ethnicity'))
-    ]
+
+    # Strip leading/trailing whitespace from input data
+    name = data.get('name', '').strip()
+    age = str(data.get('age', '')).strip()  # Ensure age is a string
+    gender = data.get('gender', '').strip()
+    interests = data.get('interests', '').strip()
+    ethnicity = data.get('ethnicity', '').strip()
+
+    # Construct a query based on provided fields
+    query = True
+    if name:
+        query &= df['Name'].str.strip() == name
+    if age:
+        query &= df['Age'].astype(str).str.strip() == age
+    if gender:
+        query &= df['Gender'].str.strip() == gender
+    if interests:
+        query &= df['Interest'].str.strip() == interests
+    if ethnicity:
+        query &= df['Ethnic Background'].str.strip() == ethnicity
+
+    filtered_df = df[query]
+
+    # Debugging: Print the filtered DataFrame to ensure correct filtering
+    print("Filtered DataFrame:")
+    print(filtered_df)
+
     if not filtered_df.empty:
-        return jsonify({'story': filtered_df.iloc[0]['LLM-Generated Personalized Story']})
+        stories = filtered_df['LLM-Generated Personalized Story'].tolist()
+        return jsonify({'stories': stories})
     else:
         return jsonify({'error': 'No matching story found'}), 404
+
 
 @app.route('/api/save-story', methods=['POST'])
 def save_story():
@@ -106,13 +135,13 @@ def save_story():
 @app.route('/api/stories', methods=['GET'])
 def get_stories():
     try:
-        if 'LLM-Generated Personalized Story' not in df.columns:
-            print("'LLM-Generated Personalized Story' column not found in DataFrame")
-            return jsonify({'error': 'LLM-Generated Personalized Story column not found in dataset'}), 500
-        
-        stories = df['LLM-Generated Personalized Story'].dropna().tolist()[:20]
-        print('Fetched stories:', stories)  # For debugging
-        return jsonify(stories)
+        if all(column in df.columns for column in ['Name', 'Age', 'Gender', 'Interest', 'Ethnic Background', 'LLM-Generated Personalized Story']):
+            stories_data = df[['Name', 'Age', 'Gender', 'Interest', 'Ethnic Background', 'LLM-Generated Personalized Story']].dropna().to_dict(orient='records')
+            print('Fetched stories:', stories_data)  # For debugging
+            return jsonify(stories_data)
+        else:
+            print("Required columns not found in DataFrame")
+            return jsonify({'error': 'Required columns not found in dataset'}), 500
     except Exception as e:
         print(f"Error fetching stories: {e}")
         return jsonify({'error': 'Failed to fetch stories'}), 500
