@@ -15,7 +15,7 @@ load_dotenv()
 # At the top of your app.py file, after importing modules
 print("Loading CSV file...")
 try:
-    df = pd.read_csv('./Dataset_Hamza.csv')
+    df = pd.read_csv('./MirrorStories_Dataset.csv')
     print("CSV file loaded successfully")
     print("Columns in DataFrame:", df.columns.tolist())
 except Exception as e:
@@ -128,7 +128,7 @@ def save_story():
     }
     global df
     df = df._append(new_data, ignore_index=True)
-    df.to_csv('./Dataset_Hamza.csv', index=False)
+    df.to_csv('./MirrorStories_Dataset.csv', index=False)
     return jsonify({'message': 'Story saved successfully'})
 
 
@@ -150,7 +150,7 @@ def get_stories():
 @app.route('/api/export', methods=['GET'])
 def export_stories():
     try:
-        return send_file('./Dataset_Hamza.csv', as_attachment=True)
+        return send_file('./MirrorStories_Dataset.csv', as_attachment=True)
     except Exception as e:
         print(f"Error exporting file: {e}")
         return jsonify({'error': 'Failed to export file'}), 500
